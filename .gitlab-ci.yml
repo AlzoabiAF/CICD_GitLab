@@ -1,0 +1,60 @@
+stages:
+  - style_check
+  - build
+  - test
+  - deploy
+
+
+build_job:
+  stage: build
+  script: 
+    - cd /home/do6/C3_SimpleBashUtils-3
+    - make -C src
+    - mkdir -p ../artifacts
+    - cp src/grep/s21_grep src/cat/s21_cat ../artifacts/
+    - cd -
+  artifacts:
+    paths:
+      - artifacts/
+    expire_in: 30 days
+  only:
+    - develop
+  after_script:
+    - bash /home/do6/scripts/notification_ci.sh
+
+
+style_check_job:
+  stage: style_check
+  script:
+    - cd /home/do6/C3_SimpleBashUtils-3 
+    - find . -name "*.c" -or -name "*.h" | xargs clang-format -n -style=Google > ../style_check.log 2>&1
+    - if grep -q . ../style_check.log; then exit 1; fi
+    - rm ../style_check.log
+    - cd -
+  only:
+  - develop
+  after_script:
+    - bash /home/do6/scripts/notification_ci.sh
+
+
+test_job:
+  stage: test
+  script:
+    - cd /home/do6/C3_SimpleBashUtils-3/src/cat
+    - COUNT_FAIL=$(bash test_cat.sh | grep -c FAIL)
+    - if [ "$COUNT_FAIL" -ne 1 ]; then echo "The tests for cat failed"; exit 1; else echo "The tests for cat were successful"; fi
+    - cd ../grep 
+    - COUNT_FAIL=$(bash test_grep.sh | grep -c FAIL)
+    - if [ "$COUNT_FAIL" -ne 1 ]; then echo "The tests for grep failed"; exit 1; else echo "The tests for grep were successful"; fi
+    - cd -
+  after_script:
+    - bash /home/do6/scripts/notification_ci.sh
+
+
+deploy_job:
+  stage: deploy
+  script: 
+    - bash /home/do6/scripts/deploy.sh
+  after_script:
+    - bash /home/do6/scripts/notification_deploy.sh
+  
